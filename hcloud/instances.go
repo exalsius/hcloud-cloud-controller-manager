@@ -82,35 +82,38 @@ func (i *instances) lookupServer(
 		serverID, isCloudServer, err := providerid.ToServerID(node.Spec.ProviderID)
 
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert provider id to server id: %w", err)
-		}
+			// Unknown prefix (e.g. remote-machine://) — fall through to name-based lookup
+			if !errors.As(err, new(*providerid.UnkownPrefixError)) {
+				return nil, fmt.Errorf("failed to convert provider id to server id: %w", err)
+			}
+		} else {
+			if isCloudServer {
+				server, err := getCloudServerByID(ctx, i.client, serverID)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get hcloud server \"%d\": %w", serverID, err)
+				}
 
-		if isCloudServer {
-			server, err := getCloudServerByID(ctx, i.client, serverID)
+				if server == nil {
+					return nil, nil
+				}
+
+				return hcloudServer{server}, nil
+			}
+
+			if i.robotClient == nil {
+				return nil, errMissingRobotClient
+			}
+			server, err := getRobotServerByID(i, int(serverID), node)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get hcloud server \"%d\": %w", serverID, err)
+				return nil, fmt.Errorf("failed to get robot server \"%d\": %w", serverID, err)
 			}
 
 			if server == nil {
 				return nil, nil
 			}
 
-			return hcloudServer{server}, nil
+			return robotServer{server, i.robotClient, i.recorder}, nil
 		}
-
-		if i.robotClient == nil {
-			return nil, errMissingRobotClient
-		}
-		server, err := getRobotServerByID(i, int(serverID), node)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get robot server \"%d\": %w", serverID, err)
-		}
-
-		if server == nil {
-			return nil, nil
-		}
-
-		return robotServer{server, i.robotClient, i.recorder}, nil
 	}
 
 	// If the node has no provider ID we try to find the server by name from

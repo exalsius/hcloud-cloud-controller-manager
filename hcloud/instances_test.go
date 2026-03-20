@@ -166,6 +166,24 @@ func TestInstances_InstanceExists(t *testing.T) {
 			},
 			expected: false,
 		}, {
+			name: "existing server by name with unknown provider ID prefix",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foobar",
+				},
+				Spec: corev1.NodeSpec{ProviderID: "remote-machine://10.0.0.1:22"},
+			},
+			expected: true,
+		}, {
+			name: "missing server by name with unknown provider ID prefix",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "barfoo",
+				},
+				Spec: corev1.NodeSpec{ProviderID: "remote-machine://10.0.0.2:22"},
+			},
+			expected: false,
+		}, {
 			name: "missing robot server by name",
 			node: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
