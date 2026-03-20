@@ -24,6 +24,12 @@ import (
 // identify a load balancer managed by Hetzner Cloud Cloud Controller Manager.
 const LabelServiceUID = "hcloud-ccm/service-uid"
 
+// HCloudServerClient defines the hcloud-go functions required for
+// name-based server lookups as a fallback when the provider ID prefix is unknown.
+type HCloudServerClient interface {
+	GetByName(ctx context.Context, name string) (*hcloud.Server, *hcloud.Response, error)
+}
+
 // HCloudLoadBalancerClient defines the hcloud-go functions required by the
 // Load Balancer operations type.
 type HCloudLoadBalancerClient interface {
@@ -75,6 +81,7 @@ type LoadBalancerOps struct {
 	ActionClient  HCloudActionClient
 	NetworkClient HCloudNetworkClient
 	RobotClient   robot.Client
+	ServerClient  HCloudServerClient
 	CertOps       *CertificateOps
 	RetryDelay    time.Duration
 	NetworkID     int64
@@ -656,8 +663,16 @@ func (l *LoadBalancerOps) ReconcileHCLBTargets(
 		id, isCloudServer, err := providerid.ToServerID(node.Spec.ProviderID)
 		if err != nil {
 			if errors.As(err, new(*providerid.UnkownPrefixError)) {
-				// ProviderID has unknown prefix, cluster might have non-hccm nodes that can not be added to the
-				// Load Balancer. Emitting an event and ignoring that Node in this reconciliation loop.
+				// Unknown prefix (e.g. remote-machine://) — try name-based server lookup
+				if l.ServerClient != nil {
+					server, _, srvErr := l.ServerClient.GetByName(ctx, node.Name)
+					if srvErr == nil && server != nil {
+						k8sNodeIDsHCloud[server.ID] = true
+						k8sNodes[server.ID] = node
+						continue
+					}
+				}
+				// Fallback: emit warning and skip
 				l.Recorder.Eventf(
 					node,
 					corev1.EventTypeWarning,

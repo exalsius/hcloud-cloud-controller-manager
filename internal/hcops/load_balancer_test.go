@@ -1439,7 +1439,7 @@ func TestLoadBalancerOps_ReconcileHCLBTargets(t *testing.T) {
 			name: "provider id does not have one of the the expected prefixes",
 			k8sNodes: []*corev1.Node{
 				{Spec: corev1.NodeSpec{ProviderID: "hcloud://1"}},
-				{Spec: corev1.NodeSpec{ProviderID: "mycloud://2"}},
+				{Spec: corev1.NodeSpec{ProviderID: "mycloud://2"}, ObjectMeta: metav1.ObjectMeta{Name: "unknown-node"}},
 			},
 			initialLB: &hcloud.LoadBalancer{
 				ID: 5,
@@ -1453,13 +1453,51 @@ func TestLoadBalancerOps_ReconcileHCLBTargets(t *testing.T) {
 					MaxTargets: 2,
 				},
 			},
-			mock: func(_ *testing.T, _ *LBReconcilementTestCase) {
-				// Nothing to mock because no action will be taken besides emitting an event
+			mock: func(_ *testing.T, tt *LBReconcilementTestCase) {
+				// ServerClient lookup fails — node is skipped with a warning event
+				tt.fx.ServerClient.
+					On("GetByName", tt.fx.Ctx, "unknown-node").
+					Return(nil, nil, fmt.Errorf("not found"))
 			},
 			perform: func(t *testing.T, tt *LBReconcilementTestCase) {
 				changed, err := tt.fx.LBOps.ReconcileHCLBTargets(tt.fx.Ctx, tt.initialLB, tt.service, tt.k8sNodes)
 				assert.NoError(t, err)
 				assert.False(t, changed)
+			},
+		},
+		{
+			name: "unknown provider ID prefix resolved via ServerClient",
+			k8sNodes: []*corev1.Node{
+				{Spec: corev1.NodeSpec{ProviderID: "hcloud://1"}},
+				{
+					Spec:       corev1.NodeSpec{ProviderID: "remote-machine://10.0.0.1:22"},
+					ObjectMeta: metav1.ObjectMeta{Name: "remote-node-1"},
+				},
+			},
+			initialLB: &hcloud.LoadBalancer{
+				ID: 6,
+				LoadBalancerType: &hcloud.LoadBalancerType{
+					MaxTargets: 25,
+				},
+			},
+			mock: func(_ *testing.T, tt *LBReconcilementTestCase) {
+				// Mock ServerClient.GetByName to resolve the remote-machine node
+				tt.fx.ServerClient.
+					On("GetByName", tt.fx.Ctx, "remote-node-1").
+					Return(&hcloud.Server{ID: 42}, nil, nil)
+
+				opts := hcloud.LoadBalancerAddServerTargetOpts{Server: &hcloud.Server{ID: 1}, UsePrivateIP: hcloud.Ptr(false)}
+				action := tt.fx.MockAddServerTarget(tt.initialLB, opts, nil)
+				tt.fx.ActionClient.On("WaitFor", tt.fx.Ctx, action).Return(nil)
+
+				opts = hcloud.LoadBalancerAddServerTargetOpts{Server: &hcloud.Server{ID: 42}, UsePrivateIP: hcloud.Ptr(false)}
+				action = tt.fx.MockAddServerTarget(tt.initialLB, opts, nil)
+				tt.fx.ActionClient.On("WaitFor", tt.fx.Ctx, action).Return(nil)
+			},
+			perform: func(t *testing.T, tt *LBReconcilementTestCase) {
+				changed, err := tt.fx.LBOps.ReconcileHCLBTargets(tt.fx.Ctx, tt.initialLB, tt.service, tt.k8sNodes)
+				assert.NoError(t, err)
+				assert.True(t, changed)
 			},
 		},
 		{
