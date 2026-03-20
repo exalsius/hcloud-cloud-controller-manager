@@ -21,6 +21,7 @@ type LoadBalancerOpsFixture struct {
 	ActionClient  *mocks.ActionClient
 	NetworkClient *mocks.NetworkClient
 	RobotClient   *mocks.RobotClient
+	ServerClient  *mocks.ServerClient
 
 	LBOps *LoadBalancerOps
 
@@ -35,6 +36,7 @@ func NewLoadBalancerOpsFixture(t *testing.T) *LoadBalancerOpsFixture {
 		CertClient:    &mocks.CertificateClient{},
 		NetworkClient: &mocks.NetworkClient{},
 		RobotClient:   &mocks.RobotClient{},
+		ServerClient:  mocks.NewServerClient(t),
 		T:             t,
 	}
 
@@ -50,6 +52,7 @@ func NewLoadBalancerOpsFixture(t *testing.T) *LoadBalancerOpsFixture {
 		ActionClient:  fx.ActionClient,
 		NetworkClient: fx.NetworkClient,
 		RobotClient:   fx.RobotClient,
+		ServerClient:  fx.ServerClient,
 		Recorder:      &record.FakeRecorder{},
 	}
 

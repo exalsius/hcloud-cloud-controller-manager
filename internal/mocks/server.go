@@ -28,7 +28,16 @@ func (m *ServerClient) All(ctx context.Context) ([]*hcloud.Server, error) {
 	return serverPtrSlice(m.T, args.Get(0)), args.Error(1)
 }
 
-func serverPtrSlice(t *testing.T, v any) []*hcloud.Server {
+// GetByName retrieves a server by name from the Hetzner Cloud API.
+func (m *ServerClient) GetByName(ctx context.Context, name string) (*hcloud.Server, *hcloud.Response, error) {
+	args := m.Called(ctx, name)
+	if args.Get(0) == nil {
+		return nil, nil, args.Error(2)
+	}
+	return args.Get(0).(*hcloud.Server), nil, args.Error(2)
+}
+
+func serverPtrSlice(t *testing.T, v interface{}) []*hcloud.Server {
 	const op = "mocks/serverPtrSlice"
 
 	t.Helper()
