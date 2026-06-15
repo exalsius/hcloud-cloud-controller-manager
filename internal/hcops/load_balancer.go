@@ -25,23 +25,24 @@ import (
 // identify a load balancer managed by Hetzner Cloud Cloud Controller Manager.
 const LabelServiceUID = "hcloud-ccm/service-uid"
 
+// HCloudServerClient defines the hcloud-go functions required for
+// name-based server lookups as a fallback when the provider ID prefix is unknown.
+type HCloudServerClient interface {
+	GetByName(ctx context.Context, name string) (*hcloud.Server, *hcloud.Response, error)
+}
+
 // LoadBalancerOps implements all operations regarding Hetzner Cloud Load Balancers.
 type LoadBalancerOps struct {
 	LBClient      hcloud.ILoadBalancerClient
 	ActionClient  hcloud.IActionClient
 	NetworkClient hcloud.INetworkClient
 	RobotClient   hrobot.RobotClient
+	ServerClient  HCloudServerClient
 	CertOps       *CertificateOps
 	RetryDelay    time.Duration
 	NetworkID     int64
 	Cfg           config.HCCMConfiguration
 	Recorder      record.EventRecorder
-}
-
-// HCloudServerClient defines the hcloud-go functions required for
-// name-based server lookups as a fallback when the provider ID prefix is unknown.
-type HCloudServerClient interface {
-	GetByName(ctx context.Context, name string) (*hcloud.Server, *hcloud.Response, error)
 }
 
 // HCloudLoadBalancerClient defines the hcloud-go functions required by the
