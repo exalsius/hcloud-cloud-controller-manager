@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/lookup-server-by-name
+      - v1.31.1-mod
 
 env:
   REGISTRY: ghcr.io
@@ -27,10 +28,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Compute branch image tag
+        id: branch-tag
+        shell: bash
+        run: |
+          # github.ref_name is the branch or tag name that triggered the workflow
+          ref_name="${GITHUB_REF_NAME}"
+          # Docker tag rules are stricter than git refs; normalize to a safe tag.
+          tag="$(echo "${ref_name}" | tr '[:upper:]' '[:lower:]' | sed -E 's#[^a-z0-9._-]+#-#g; s#^-+##; s#-+$##')"
+          # Fallback just in case normalization produces empty string
+          if [[ -z "${tag}" ]]; then
+            tag="unknown-branch"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: dev/Dockerfile
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.branch-tag.outputs.tag }}
